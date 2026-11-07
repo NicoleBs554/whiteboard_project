@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pizarra virtual</title>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+  <section id="pantalla-sala">
+    <form id="form-sala">
+      <h1>Pizarra virtual</h1>
+      <label for="id-sala">ID de la sala</label>
+      <input id="id-sala" type="text" maxlength="30" placeholder="Ej: clase1" autocomplete="off" required>
+      <button type="submit">Entrar</button>
+      <p id="error-sala" role="alert" hidden></p>
+      <p id="estado-conexion" data-estado="conectando" role="status" aria-live="polite">Conectando al servidor...</p>
+    </form>
+  </section>
+
+  <section id="pantalla-pizarra" hidden>
+    <div id="barra">
+      <button id="btn-lapiz" class="activo" type="button">Lápiz</button>
+      <button id="btn-borrador" type="button">Borrador</button>
+      <label>Color <input id="color" type="color" value="#1a1a1a"></label>
+      <label>Grosor <input id="grosor" type="range" min="1" max="20" value="3"></label>
+      <button id="btn-limpiar" type="button">Limpiar</button>
+      <span id="nombre-sala"></span>
+      <span id="estado-conexion-barra" data-estado="conectando" role="status" aria-live="polite">Conectando al servidor...</span>
+    </div>
+    <div id="lienzo">
+      <canvas id="pizarra" width="1200" height="600"></canvas>
+    </div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
