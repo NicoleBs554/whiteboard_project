@@ -1,0 +1,5 @@
+{
+  "guardarTrazo": "INSERT INTO trazo (sala, datos) VALUES ($1, $2)",
+  "cargarTrazos": "SELECT datos FROM trazo WHERE sala = $1 ORDER BY id",
+  "borrarTrazos": "DELETE FROM trazo WHERE sala = $1"
+}

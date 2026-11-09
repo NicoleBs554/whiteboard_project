@@ -1,6 +1,11 @@
 function registrar(nivel, metodo) {
-  return (mensaje) => {
-    console[metodo](`[${nivel}] ${new Date().toISOString()} ${mensaje}`);
+  return (mensaje, ...args) => {
+    const encabezado = `[${nivel}] ${new Date().toISOString()} ${mensaje}`;
+    if (args.length > 0) {
+      console[metodo](encabezado, ...args);
+    } else {
+      console[metodo](encabezado);
+    }
   };
 }
 
