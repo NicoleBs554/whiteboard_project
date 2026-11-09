@@ -10,6 +10,7 @@ Pizarra colaborativa con salas en tiempo real. Los trazos se conservan en memori
 ## Iniciar
 
 ```sh
+cd pizarra-virtual
 npm install
 npm start
 ```
