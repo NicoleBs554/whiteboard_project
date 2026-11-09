@@ -12,6 +12,7 @@ const formSala = document.getElementById("form-sala");
 const inputSala = document.getElementById("id-sala");
 const errorSala = document.getElementById("error-sala");
 const nombreSala = document.getElementById("nombre-sala");
+const contadorUsuarios = document.getElementById("contador-usuarios");
 const estadosConexion = [
   document.getElementById("estado-conexion"),
   document.getElementById("estado-conexion-barra"),
@@ -43,6 +44,12 @@ const conexion = crearConexionPizarra({
   alRecibirTrazo: pintarTrazo,
   alLimpiar: limpiarCanvas,
   alCambiarEstado: actualizarEstadoConexion,
+  alActualizarUsuarios(total) {
+    if (contadorUsuarios) {
+      contadorUsuarios.textContent = `${total} usuario${total === 1 ? "" : "s"}`;
+      contadorUsuarios.hidden = false;
+    }
+  },
 });
 
 formSala.addEventListener("submit", (e) => {

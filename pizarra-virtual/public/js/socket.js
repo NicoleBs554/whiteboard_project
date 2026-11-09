@@ -55,6 +55,9 @@ export function crearConexionPizarra(callbacks, crearCliente = globalThis.io) {
   });
   socket.on("dibujar", callbacks.alRecibirTrazo);
   socket.on("limpiar", callbacks.alLimpiar);
+  if (callbacks.alActualizarUsuarios) {
+    socket.on("usuarios", callbacks.alActualizarUsuarios);
+  }
 
   callbacks.alCambiarEstado(socket.connected ? "conectado" : "conectando", "");
   if (socket.connected) enviarPendientes();

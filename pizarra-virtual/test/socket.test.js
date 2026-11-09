@@ -98,6 +98,8 @@ test("entrega al cliente los eventos definidos por el contrato", () => {
   const historial = [];
   const trazos = [];
   let limpiezas = 0;
+  let usuariosConectados = 0;
+
   crearConexionPizarra({
     alRecibirHistorial(lista) {
       historial.push(lista);
@@ -108,6 +110,9 @@ test("entrega al cliente los eventos definidos por el contrato", () => {
     alLimpiar() {
       limpiezas += 1;
     },
+    alActualizarUsuarios(numero) {
+      usuariosConectados = numero;
+    },
     alCambiarEstado() {},
   }, () => socket);
 
@@ -115,8 +120,10 @@ test("entrega al cliente los eventos definidos por el contrato", () => {
   socket.recibir("historial", lista);
   socket.recibir("dibujar", lista[0]);
   socket.recibir("limpiar");
+  socket.recibir("usuarios", 3);
 
   assert.deepEqual(historial, [lista]);
   assert.deepEqual(trazos, [lista[0]]);
   assert.equal(limpiezas, 1);
+  assert.equal(usuariosConectados, 3);
 });

@@ -3,7 +3,7 @@
 Única fuente de verdad entre Frontend (A), Tiempo real (B) y Estado/BD (C).
 **Si algo cambia: se propone en el grupo, se actualiza este archivo y luego se cambia el código.**
 
-Versión: 1.0 | Última modificación: ____/____/____ | Aprobado por: A [ ]  B [ ]  C [ ]
+Versión: 1.0 | Última modificación: 2026-11-09 | Aprobado por: A [ ]  B [ ]  C [x]
 
 ---
 
@@ -90,4 +90,4 @@ Un trazo = desde que se pulsa el botón izquierdo hasta que se suelta.
 
 | Fecha | Cambio | Propuesto por | Aprobado |
 |---|---|---|---|
-| ____/____/____ | Versión inicial | | |
+| 2026-11-09 | Versión inicial verificada y aprobada por Persona C | Equipo | C |

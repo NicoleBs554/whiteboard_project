@@ -59,6 +59,7 @@ button.activo, #form-sala button[type="submit"] { background: #202020; border-co
 }
 #barra label { display: flex; align-items: center; gap: 6px; font-size: .9rem; }
 #nombre-sala { margin-left: auto; font-size: .9rem; color: #5f5d58; }
+#contador-usuarios { font-size: .9rem; color: #5f5d58; }
 #estado-conexion-barra { font-size: .9rem; color: #5f5d58; }
 
 #lienzo { padding: 14px; }
