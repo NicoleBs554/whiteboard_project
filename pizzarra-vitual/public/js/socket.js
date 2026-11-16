@@ -55,11 +55,14 @@ export function crearConexionPizarra(callbacks, crearCliente = globalThis.io) {
   });
   socket.on("dibujar", callbacks.alRecibirTrazo);
   socket.on("limpiar", callbacks.alLimpiar);
+  socket.on("sala-error", (mensaje) => callbacks.alErrorSala?.(mensaje));
+  socket.on("usuarios", (total) => callbacks.alCambiarUsuarios?.(total));
 
   callbacks.alCambiarEstado(socket.connected ? "conectado" : "conectando", "");
   if (socket.connected) enviarPendientes();
 
   return {
+    socket,
     unirseSala(idSala) {
       salaActiva = idSala;
       if (socket.connected) socket.emit("unirseSala", idSala);

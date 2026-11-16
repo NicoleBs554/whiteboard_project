@@ -2,6 +2,13 @@ import { agregarTrazo, obtenerHistorial, limpiarSala } from "../services/salaSer
 import { validarTrazo, validarSala } from "../utils/validador.js";
 import { log } from "../utils/logger.js";
 
+const MAX_PARTICIPANTES = 3;
+
+function notificarUsuarios(nsp, idSala) {
+  const total = nsp.adapter.rooms.get(idSala)?.size ?? 0;
+  nsp.to(idSala).emit("usuarios", total);
+}
+
 export function registrarPizarra(nsp) {
   nsp.on("connection", (socket) => {
     log.info(`Conectado: ${socket.id}`);
@@ -13,11 +20,25 @@ export function registrarPizarra(nsp) {
       }
 
       const salaAnterior = socket.data.sala;
-      if (salaAnterior && salaAnterior !== idSala) socket.leave(salaAnterior);
+      const yaEstabaEnSala = salaAnterior === idSala;
+      const participantes = nsp.adapter.rooms.get(idSala);
+      if (!yaEstabaEnSala && participantes?.size >= MAX_PARTICIPANTES) {
+        socket.emit("sala-error", "La sala ya tiene el máximo de 3 participantes.");
+        return;
+      }
+
+      if (salaAnterior && salaAnterior !== idSala) {
+        socket.to(salaAnterior).emit("peer-disconnected", socket.id);
+        socket.leave(salaAnterior);
+        notificarUsuarios(nsp, salaAnterior);
+      }
 
       socket.join(idSala);
       socket.data.sala = idSala;
+      socket.data.webrtcReady = false;
       socket.emit("historial", obtenerHistorial(idSala));
+      if (!yaEstabaEnSala) socket.to(idSala).emit("peer-joined", socket.id);
+      notificarUsuarios(nsp, idSala);
     });
 
     socket.on("dibujar", (trazo) => {
@@ -41,6 +62,11 @@ export function registrarPizarra(nsp) {
     });
 
     socket.on("disconnect", () => {
+      const sala = socket.data.sala;
+      if (sala) {
+        socket.to(sala).emit("peer-disconnected", socket.id);
+        notificarUsuarios(nsp, sala);
+      }
       log.info(`Desconectado: ${socket.id}`);
     });
   });

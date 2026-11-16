@@ -55,7 +55,15 @@ Un trazo = desde que se pulsa el botón izquierdo hasta que se suelta.
 | `dibujar` | Servidor -> Clientes de la sala | `trazo` | Los demás pintan el trazo (no se reenvía al emisor) |
 | `limpiar` | Cliente -> Servidor | (sin datos) | Pide borrar la pizarra de la sala |
 | `limpiar` | Servidor -> Todos en la sala | (sin datos) | Todos borran su canvas |
-| `usuarios` | Servidor -> Clientes de la sala | `numero` | Cantidad de conectados (opcional) |
+| `usuarios` | Servidor -> Clientes de la sala | `numero` | Cantidad de conectados (máximo 3) |
+| `webrtc-ready` | Cliente -> Servidor | (sin datos) | Indica que el cliente activó sus medios |
+| `obtener-pares` | Cliente -> Servidor | callback con `[socketId, ...]` | Devuelve los otros participantes con medios activos |
+| `peer-ready` | Servidor -> Clientes de la sala | `socketId` | Un participante activó sus medios |
+| `webrtc-offer` | Cliente <-> Servidor <-> Cliente | `{ to, sdp }` / `{ from, sdp }` | Reenvía la oferta solo al peer de la misma sala |
+| `webrtc-answer` | Cliente <-> Servidor <-> Cliente | `{ to, sdp }` / `{ from, sdp }` | Reenvía la respuesta solo al peer de la misma sala |
+| `webrtc-ice-candidate` | Cliente <-> Servidor <-> Cliente | `{ to, candidate }` / `{ from, candidate }` | Intercambia candidatos ICE entre los peers |
+| `peer-disconnected` | Servidor -> Clientes de la sala | `socketId` | Indica que un participante salió o se desconectó |
+| `sala-error` | Servidor -> Cliente | mensaje | Informa que la sala alcanzó el máximo de participantes |
 
 ### Orden de eventos al entrar
 
@@ -71,6 +79,8 @@ Un trazo = desde que se pulsa el botón izquierdo hasta que se suelta.
 - Si el trazo es inválido (campos faltantes, `x` e `y` de distinto largo, valores fuera de rango): **se ignora** y se registra un `warning` en los logs. No se responde error al cliente.
 - Si el socket no ha enviado `unirseSala`, se ignoran sus `dibujar` y `limpiar`.
 - Los trazos se guardan **en memoria** por sala: `{ "sala1": [trazo, ...] }`. La base de datos es opcional.
+- Cada sala admite un máximo de **3 sockets**. Los mensajes de señalización se aceptan solo entre sockets de la misma sala.
+- El servidor reenvía SDP e ICE, pero nunca procesa ni almacena el audio o video. La configuración de ICE se publica desde el servidor mediante `GET /rtc-config`.
 
 ---
 

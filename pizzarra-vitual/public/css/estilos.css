@@ -61,6 +61,42 @@ button.activo, #form-sala button[type="submit"] { background: #202020; border-co
 #nombre-sala { margin-left: auto; font-size: .9rem; color: #5f5d58; }
 #estado-conexion-barra { font-size: .9rem; color: #5f5d58; }
 
+#video-panel {
+  padding: 12px 14px;
+  background: #f7f6f3;
+  border-bottom: 1px solid #cfccc5;
+}
+#video-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+#video-controles p { margin: 0; color: #5f5d58; font-size: .9rem; }
+#participantes { margin-left: auto; font-size: .9rem; color: #5f5d58; }
+#videos, #videos-remotos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+#videos { margin-top: 12px; }
+#videos figure {
+  width: min(100%, 240px);
+  margin: 0;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #cfccc5;
+  border-radius: 6px;
+}
+#videos video {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  background: #202020;
+  border-radius: 4px;
+}
+#videos figcaption { padding-top: 6px; font-size: .85rem; color: #5f5d58; }
+
 #lienzo { padding: 14px; }
 #pizarra {
   display: block;

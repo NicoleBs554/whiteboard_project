@@ -29,6 +29,20 @@
       <span id="nombre-sala"></span>
       <span id="estado-conexion-barra" data-estado="conectando" role="status" aria-live="polite">Conectando al servidor...</span>
     </div>
+    <section id="video-panel" aria-label="Videollamada">
+      <div id="video-controles">
+        <button id="btn-activar-video" type="button">Activar cámara y micrófono</button>
+        <p id="estado-video" role="status" aria-live="polite">Videollamada desactivada.</p>
+        <span id="participantes">1 participante</span>
+      </div>
+      <div id="videos">
+        <figure id="video-local-contenedor" hidden>
+          <video id="video-local" autoplay playsinline muted></video>
+          <figcaption>Tu cámara</figcaption>
+        </figure>
+        <div id="videos-remotos"></div>
+      </div>
+    </section>
     <div id="lienzo">
       <canvas id="pizarra" width="1200" height="600"></canvas>
     </div>

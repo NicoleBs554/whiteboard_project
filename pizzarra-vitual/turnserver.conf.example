@@ -1,0 +1,8 @@
+listening-port=3478
+fingerprint
+lt-cred-mech
+realm=REEMPLAZAR_POR_TU_DOMINIO
+user=REEMPLAZAR_USUARIO:REEMPLAZAR_CONTRASENA
+
+# En producción configura también external-ip, puertos de relay y TLS
+# según la red y el certificado del servidor.
