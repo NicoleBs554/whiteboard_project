@@ -39,7 +39,7 @@ El cliente espera que Socket.IO sirva `/socket.io/socket.io.js` en la misma dire
 
 ## Videollamada
 
-La videollamada usa WebRTC en malla y admite hasta tres participantes por sala (dos conexiones peer-to-peer por navegador). Al entrar, cada persona puede activar cámara y micrófono. Socket.IO intercambia las ofertas, respuestas y candidatos ICE, pero el audio y el video se transmiten entre navegadores. El cliente solo negocia con participantes de su sala.
+La videollamada usa WebRTC en malla y admite hasta tres participantes por sala (dos conexiones peer-to-peer por navegador). Al entrar, cada persona puede activar cámara y micrófono (o uno solo de ellos si falta el otro dispositivo), silenciar el micrófono, apagar la cámara o detener la videollamada. Socket.IO intercambia las ofertas, respuestas y candidatos ICE, pero el audio y el video se transmiten entre navegadores. El cliente solo negocia con participantes de su sala.
 
 La aplicación obtiene la configuración ICE desde `GET /rtc-config`. Define `RTC_ICE_SERVERS` como un arreglo JSON en el entorno del servidor para configurar STUN/TURN. Ejemplo de desarrollo:
 
@@ -48,4 +48,4 @@ $env:RTC_ICE_SERVERS='[{"urls":"stun:TU_SERVIDOR:3478"},{"urls":"turn:TU_SERVIDO
 npm start
 ```
 
-Coturn es un servicio separado, no una dependencia npm. `pizzarra-vitual/turnserver.conf.example` contiene una plantilla inicial: reemplaza todos los valores de ejemplo y configura los puertos de escucha/relay y el firewall del VPS. No uses credenciales de ejemplo en producción. La cámara requiere HTTPS fuera de `localhost`; TURN es necesario cuando las conexiones directas no pueden atravesar NAT o firewalls.
+Coturn es un servicio separado para Linux, no una dependencia npm. `pizzarra-vitual/turnserver.conf.example` incluye la plantilla lista para `/etc/turnserver.conf` junto con los pasos de instalación (`sudo apt install -y coturn`, habilitar `/etc/default/coturn`, abrir `3478/tcp`, `3478/udp`, `5349/tcp`, `49152:65535/udp` en `ufw` y ejecutar `sudo systemctl enable --now coturn`). Reemplaza todos los valores de ejemplo y no uses credenciales de prueba en producción. La cámara requiere HTTPS fuera de `localhost`; TURN es necesario cuando las conexiones directas no pueden atravesar NAT o firewalls.

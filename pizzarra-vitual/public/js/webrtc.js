@@ -1,4 +1,35 @@
-export function crearVideollamada(socket, callbacks) {
+async function solicitarMediosDisponibles(mediaDevices) {
+  const opciones = [
+    { video: true, audio: true },
+    { video: true, audio: false },
+    { video: false, audio: true },
+  ];
+  let ultimoError;
+
+  for (const restriccion of opciones) {
+    try {
+      return await mediaDevices.getUserMedia(restriccion);
+    } catch (error) {
+      ultimoError = error;
+      if (error?.name !== "NotFoundError") {
+        throw error;
+      }
+    }
+  }
+
+  throw ultimoError;
+}
+
+function alternarPistas(pistas, activo) {
+  if (!Array.isArray(pistas) || pistas.length === 0) return false;
+  const nuevoEstado = typeof activo === "boolean" ? activo : !pistas[0].enabled;
+  pistas.forEach((pista) => {
+    pista.enabled = nuevoEstado;
+  });
+  return nuevoEstado;
+}
+
+export function crearVideollamada(socket, callbacks, entorno = globalThis) {
   const conexiones = new Map();
   const candidatosPendientes = new Map();
   let streamLocal = null;
@@ -25,20 +56,24 @@ export function crearVideollamada(socket, callbacks) {
   }
 
   function cerrarPeers() {
-    for (const idPeer of conexiones.keys()) cerrarPeer(idPeer);
+    for (const idPeer of Array.from(conexiones.keys())) cerrarPeer(idPeer);
     candidatosPendientes.clear();
   }
 
   function crearPeerConnection(idPeer) {
-    const conexion = new RTCPeerConnection({ iceServers });
+    const PeerConnection = entorno.RTCPeerConnection;
+    const conexion = new PeerConnection({ iceServers });
     conexiones.set(idPeer, conexion);
     streamLocal.getTracks().forEach((track) => conexion.addTrack(track, streamLocal));
 
     conexion.onicecandidate = (evento) => {
       if (evento.candidate && socket.connected) {
+        const candidato = typeof evento.candidate.toJSON === "function"
+          ? evento.candidate.toJSON()
+          : evento.candidate;
         socket.emit("webrtc-ice-candidate", {
           to: idPeer,
-          candidate: evento.candidate.toJSON(),
+          candidate: candidato,
         });
       }
     };
@@ -71,7 +106,7 @@ export function crearVideollamada(socket, callbacks) {
     const conexion = crearPeerConnection(idPeer);
     const oferta = await conexion.createOffer();
     await conexion.setLocalDescription(oferta);
-    socket.emit("webrtc-offer", { to: idPeer, sdp: conexion.localDescription });
+    socket.emit("webrtc-offer", { to: idPeer, sdp: conexion.localDescription ?? oferta });
   }
 
   function puedeIniciarOferta(idPeer) {
@@ -109,7 +144,7 @@ export function crearVideollamada(socket, callbacks) {
       await aplicarCandidatosPendientes(from, conexion);
       const respuesta = await conexion.createAnswer();
       await conexion.setLocalDescription(respuesta);
-      socket.emit("webrtc-answer", { to: from, sdp: conexion.localDescription });
+      socket.emit("webrtc-answer", { to: from, sdp: conexion.localDescription ?? respuesta });
     } catch (error) {
       reportarError(error);
     }
@@ -146,7 +181,8 @@ export function crearVideollamada(socket, callbacks) {
   socket.on("disconnect", cerrarPeers);
 
   async function cargarConfiguracion() {
-    const respuesta = await fetch("/rtc-config");
+    const fetchFn = entorno.fetch ?? globalThis.fetch;
+    const respuesta = await fetchFn("/rtc-config");
     if (!respuesta.ok) throw new Error("No se pudo cargar la configuración de ICE.");
     const configuracion = await respuesta.json();
     if (!configuracion || !Array.isArray(configuracion.iceServers)) {
@@ -160,16 +196,17 @@ export function crearVideollamada(socket, callbacks) {
     if (preparacion) return preparacion;
 
     preparacion = (async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
+      const mediaDevices = entorno.navigator?.mediaDevices;
+      if (!mediaDevices?.getUserMedia) {
         throw new Error("Este navegador no permite acceso a cámara y micrófono.");
       }
-      if (typeof RTCPeerConnection !== "function") {
+      if (typeof entorno.RTCPeerConnection !== "function") {
         throw new Error("Este navegador no es compatible con WebRTC.");
       }
 
       let stream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream = await solicitarMediosDisponibles(mediaDevices);
         iceServers = await cargarConfiguracion();
       } catch (error) {
         stream?.getTracks().forEach((track) => track.stop());
@@ -196,14 +233,36 @@ export function crearVideollamada(socket, callbacks) {
     conError(anunciarListo());
   }
 
-  function detener() {
+  function detener(abandonarSala = false) {
     cerrarPeers();
     streamLocal?.getTracks().forEach((track) => track.stop());
     streamLocal = null;
-    salaLista = false;
+    preparacion = null;
+    if (abandonarSala) {
+      salaLista = false;
+    }
   }
 
-  globalThis.addEventListener?.("pagehide", detener);
+  function alternarCamara(activo) {
+    return alternarPistas(streamLocal?.getVideoTracks(), activo);
+  }
 
-  return { iniciar, entrarSala, detener };
+  function alternarMicrofono(activo) {
+    return alternarPistas(streamLocal?.getAudioTracks(), activo);
+  }
+
+  function obtenerTotalConexiones() {
+    return conexiones.size;
+  }
+
+  entorno.addEventListener?.("pagehide", () => detener(true));
+
+  return {
+    iniciar,
+    entrarSala,
+    detener,
+    alternarCamara,
+    alternarMicrofono,
+    obtenerTotalConexiones,
+  };
 }

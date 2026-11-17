@@ -15,6 +15,9 @@ const errorSala = document.getElementById("error-sala");
 const nombreSala = document.getElementById("nombre-sala");
 const errorVideo = document.getElementById("estado-video");
 const botonVideo = document.getElementById("btn-activar-video");
+const botonCamara = document.getElementById("btn-toggle-camara");
+const botonMicrofono = document.getElementById("btn-toggle-microfono");
+const botonDetenerVideo = document.getElementById("btn-detener-video");
 const videoLocal = document.getElementById("video-local");
 const videoLocalContenedor = document.getElementById("video-local-contenedor");
 const videosRemotos = document.getElementById("videos-remotos");
@@ -42,6 +45,18 @@ function actualizarEstadoConexion(estado, detalle) {
   });
 }
 
+function reiniciarInterfazVideo() {
+  videoLocal.srcObject = null;
+  videoLocalContenedor.hidden = true;
+  botonCamara.hidden = true;
+  botonMicrofono.hidden = true;
+  botonDetenerVideo.hidden = true;
+  botonVideo.hidden = false;
+  elementosRemotos.forEach((elemento) => elemento.figura.remove());
+  elementosRemotos.clear();
+  errorVideo.textContent = "Videollamada desactivada.";
+}
+
 const conexion = crearConexionPizarra({
   alRecibirHistorial(lista) {
     salaPreparada = true;
@@ -55,6 +70,8 @@ const conexion = crearConexionPizarra({
   alCambiarEstado: actualizarEstadoConexion,
   alErrorSala(mensaje) {
     salaPreparada = false;
+    videollamada.detener(true);
+    reiniciarInterfazVideo();
     pantallaPizarra.hidden = true;
     pantallaSala.hidden = false;
     errorSala.textContent = mensaje;
@@ -71,7 +88,20 @@ videollamada = crearVideollamada(conexion.socket, {
     videoLocal.srcObject = stream;
     videoLocalContenedor.hidden = false;
     botonVideo.hidden = true;
-    errorVideo.textContent = "Cámara y micrófono activos.";
+    const tieneCamara = stream.getVideoTracks().length > 0;
+    const tieneMicrofono = stream.getAudioTracks().length > 0;
+    botonCamara.hidden = !tieneCamara;
+    botonCamara.textContent = "Cámara: ON";
+    botonCamara.classList.toggle("activo", tieneCamara);
+    botonMicrofono.hidden = !tieneMicrofono;
+    botonMicrofono.textContent = "Micrófono: ON";
+    botonMicrofono.classList.toggle("activo", tieneMicrofono);
+    botonDetenerVideo.hidden = false;
+    errorVideo.textContent = tieneCamara && tieneMicrofono
+      ? "Cámara y micrófono activos."
+      : tieneCamara
+        ? "Solo cámara activa (no se detectó micrófono)."
+        : "Solo micrófono activo (no se detectó cámara).";
   },
   alRecibirStream(idPeer, stream) {
     let elemento = elementosRemotos.get(idPeer);
@@ -112,6 +142,23 @@ botonVideo.addEventListener("click", async () => {
   const iniciado = await videollamada.iniciar();
   botonVideo.disabled = false;
   if (!iniciado) botonVideo.hidden = false;
+});
+
+botonCamara.addEventListener("click", () => {
+  const activa = videollamada.alternarCamara();
+  botonCamara.textContent = `Cámara: ${activa ? "ON" : "OFF"}`;
+  botonCamara.classList.toggle("activo", activa);
+});
+
+botonMicrofono.addEventListener("click", () => {
+  const activo = videollamada.alternarMicrofono();
+  botonMicrofono.textContent = `Micrófono: ${activo ? "ON" : "OFF"}`;
+  botonMicrofono.classList.toggle("activo", activo);
+});
+
+botonDetenerVideo.addEventListener("click", () => {
+  videollamada.detener();
+  reiniciarInterfazVideo();
 });
 
 formSala.addEventListener("submit", (e) => {
