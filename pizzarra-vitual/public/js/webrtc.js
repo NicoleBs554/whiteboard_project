@@ -130,6 +130,26 @@ export function crearVideollamada(socket, callbacks) {
     }
   }
 
+  function alternarAudio() {
+    if (!streamLocal) return false;
+    const track = streamLocal.getAudioTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      return track.enabled;
+    }
+    return false;
+  }
+
+  function alternarVideo() {
+    if (!streamLocal) return false;
+    const track = streamLocal.getVideoTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      return track.enabled;
+    }
+    return false;
+  }
+
   function entrarSala() {
     salaLista = true;
     anunciarListo();
@@ -150,5 +170,5 @@ export function crearVideollamada(socket, callbacks) {
 
   globalThis.addEventListener?.("pagehide", detener);
 
-  return { iniciar, entrarSala, detener };
+  return { iniciar, entrarSala, detener, alternarAudio, alternarVideo };
 }

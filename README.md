@@ -38,9 +38,7 @@ El cliente espera que Socket.IO sirva `/socket.io/socket.io.js` en la misma dire
 
 ## Videollamada
 
-La videollamada usa WebRTC en malla y admite hasta tres participantes por sala (dos conexiones peer-to-peer por navegador). Al entrar, cada persona puede activar cámara y micrófono. Socket.IO intercambia las ofertas, respuestas y candidatos ICE, pero el audio y el video se transmiten entre navegadores. El cliente solo negocia con participantes de su sala.
-
-La aplicación obtiene la configuración ICE desde `GET /rtc-config`. Define `RTC_ICE_SERVERS` como un arreglo JSON en el entorno del servidor para configurar STUN/TURN. Ejemplo de desarrollo:
+La videollamada usa la librería PeerJS para establecer conexiones peer-to-peer en malla y admite hasta tres participantes por sala (dos conexiones P2P por navegador). Al entrar, cada persona puede activar cámara y micrófono. El servidor Express monta el servicio de señalización en `/peerjs`, mientras que el audio y el video se transmiten directamente entre los navegadores. Cada cliente solo negocia con participantes de su misma sala.
 
 ```powershell
 $env:RTC_ICE_SERVERS='[{"urls":"stun:TU_SERVIDOR:3478"},{"urls":"turn:TU_SERVIDOR:3478?transport=udp","username":"USUARIO","credential":"CONTRASENA"}]'
