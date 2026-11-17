@@ -1,209 +1,174 @@
+function cargarPeerJS() {
+  if (typeof Peer !== "undefined") return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("No se pudo cargar la librería PeerJS."));
+    document.head.appendChild(script);
+  });
+}
+
 export function crearVideollamada(socket, callbacks) {
-  const conexiones = new Map();
-  const candidatosPendientes = new Map();
+  const llamadas = new Map();
   let streamLocal = null;
-  let iceServers = [];
+  let peer = null;
   let salaLista = false;
-  let preparacion = null;
 
   function reportarError(error) {
     callbacks.alError(error instanceof Error ? error.message : String(error));
   }
 
-  function conError(promise) {
-    promise.catch(reportarError);
-  }
-
-  function cerrarPeer(idPeer) {
-    const conexion = conexiones.get(idPeer);
-    if (conexion) {
-      conexion.close();
-      conexiones.delete(idPeer);
+  function cerrarLlamada(idPeer) {
+    const llamada = llamadas.get(idPeer);
+    if (llamada) {
+      llamada.close();
+      llamadas.delete(idPeer);
       callbacks.alDesconectar(idPeer);
     }
-    candidatosPendientes.delete(idPeer);
   }
 
-  function cerrarPeers() {
-    for (const idPeer of conexiones.keys()) cerrarPeer(idPeer);
-    candidatosPendientes.clear();
+  function cerrarLlamadas() {
+    for (const idPeer of llamadas.keys()) {
+      cerrarLlamada(idPeer);
+    }
+    llamadas.clear();
   }
 
-  function crearPeerConnection(idPeer) {
-    const conexion = new RTCPeerConnection({ iceServers });
-    conexiones.set(idPeer, conexion);
-    streamLocal.getTracks().forEach((track) => conexion.addTrack(track, streamLocal));
+  function registrarLlamada(idPeer, llamada) {
+    llamadas.set(idPeer, llamada);
 
-    conexion.onicecandidate = (evento) => {
-      if (evento.candidate && socket.connected) {
-        socket.emit("webrtc-ice-candidate", {
-          to: idPeer,
-          candidate: evento.candidate.toJSON(),
-        });
-      }
-    };
+    llamada.on("stream", (streamRemoto) => {
+      callbacks.alRecibirStream(idPeer, streamRemoto);
+    });
 
-    conexion.ontrack = (evento) => {
-      const stream = evento.streams[0];
-      if (stream) callbacks.alRecibirStream(idPeer, stream);
-    };
+    llamada.on("close", () => {
+      cerrarLlamada(idPeer);
+    });
 
-    conexion.onconnectionstatechange = () => {
-      if (conexion.connectionState === "failed" || conexion.connectionState === "closed") {
-        cerrarPeer(idPeer);
-      }
-    };
-
-    return conexion;
+    llamada.on("error", (error) => {
+      reportarError(error);
+      cerrarLlamada(idPeer);
+    });
   }
 
-  async function aplicarCandidatosPendientes(idPeer, conexion) {
-    const candidatos = candidatosPendientes.get(idPeer) ?? [];
-    candidatosPendientes.delete(idPeer);
-    for (const candidato of candidatos) {
-      await conexion.addIceCandidate(candidato);
+  function conectarPeer(idPeer) {
+    if (!peer || !streamLocal || !salaLista || llamadas.has(idPeer)) return;
+
+    if (socket.id && socket.id.localeCompare(idPeer) >= 0) return;
+
+    const llamada = peer.call(idPeer, streamLocal);
+    if (llamada) {
+      registrarLlamada(idPeer, llamada);
     }
   }
 
-  async function crearOferta(idPeer) {
-    if (!streamLocal || !salaLista || !socket.connected || conexiones.has(idPeer)) return;
-
-    const conexion = crearPeerConnection(idPeer);
-    const oferta = await conexion.createOffer();
-    await conexion.setLocalDescription(oferta);
-    socket.emit("webrtc-offer", { to: idPeer, sdp: conexion.localDescription });
-  }
-
-  function puedeIniciarOferta(idPeer) {
-    return socket.id && socket.id.localeCompare(idPeer) < 0;
-  }
-
-  async function anunciarListo() {
-    if (!streamLocal || !salaLista || !socket.connected) return;
+  function anunciarListo() {
+    if (!streamLocal || !salaLista || !socket.connected || !peer) return;
 
     socket.emit("webrtc-ready");
     socket.emit("obtener-pares", (pares) => {
-      if (!Array.isArray(pares)) {
-        reportarError("El servidor devolvió una lista de participantes inválida.");
-        return;
+      if (Array.isArray(pares)) {
+        pares.forEach((idPeer) => conectarPeer(idPeer));
       }
-      pares.forEach((idPeer) => {
-        if (typeof idPeer === "string" && puedeIniciarOferta(idPeer)) {
-          conError(crearOferta(idPeer));
-        }
-      });
     });
   }
 
   socket.on("peer-ready", (idPeer) => {
-    if (typeof idPeer === "string" && puedeIniciarOferta(idPeer)) {
-      conError(crearOferta(idPeer));
-    }
+    conectarPeer(idPeer);
   });
 
-  socket.on("webrtc-offer", async ({ from, sdp } = {}) => {
-    if (typeof from !== "string" || !streamLocal) return;
-    try {
-      const conexion = conexiones.get(from) ?? crearPeerConnection(from);
-      await conexion.setRemoteDescription(sdp);
-      await aplicarCandidatosPendientes(from, conexion);
-      const respuesta = await conexion.createAnswer();
-      await conexion.setLocalDescription(respuesta);
-      socket.emit("webrtc-answer", { to: from, sdp: conexion.localDescription });
-    } catch (error) {
-      reportarError(error);
-    }
+  socket.on("peer-disconnected", (idPeer) => {
+    cerrarLlamada(idPeer);
   });
 
-  socket.on("webrtc-answer", async ({ from, sdp } = {}) => {
-    const conexion = conexiones.get(from);
-    if (!conexion) return;
-    try {
-      await conexion.setRemoteDescription(sdp);
-      await aplicarCandidatosPendientes(from, conexion);
-    } catch (error) {
-      reportarError(error);
-    }
+  socket.on("disconnect", () => {
+    cerrarLlamadas();
   });
-
-  socket.on("webrtc-ice-candidate", async ({ from, candidate } = {}) => {
-    if (typeof from !== "string" || !candidate) return;
-    const conexion = conexiones.get(from);
-    if (!conexion || !conexion.remoteDescription) {
-      const pendientes = candidatosPendientes.get(from) ?? [];
-      pendientes.push(candidate);
-      candidatosPendientes.set(from, pendientes);
-      return;
-    }
-    try {
-      await conexion.addIceCandidate(candidate);
-    } catch (error) {
-      reportarError(error);
-    }
-  });
-
-  socket.on("peer-disconnected", cerrarPeer);
-  socket.on("disconnect", cerrarPeers);
-
-  async function cargarConfiguracion() {
-    const respuesta = await fetch("/rtc-config");
-    if (!respuesta.ok) throw new Error("No se pudo cargar la configuración de ICE.");
-    const configuracion = await respuesta.json();
-    if (!configuracion || !Array.isArray(configuracion.iceServers)) {
-      throw new Error("La configuración de ICE del servidor no es válida.");
-    }
-    return configuracion.iceServers;
-  }
 
   async function iniciar() {
     if (streamLocal) return true;
-    if (preparacion) return preparacion;
 
-    preparacion = (async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Este navegador no permite acceso a cámara y micrófono.");
-      }
-      if (typeof RTCPeerConnection !== "function") {
-        throw new Error("Este navegador no es compatible con WebRTC.");
-      }
-
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        iceServers = await cargarConfiguracion();
-      } catch (error) {
-        stream?.getTracks().forEach((track) => track.stop());
-        throw error;
-      }
-
-      streamLocal = stream;
-      callbacks.alStreamLocal(streamLocal);
-      await anunciarListo();
-      return true;
-    })();
+    if (!navigator.mediaDevices?.getUserMedia) {
+      reportarError("El navegador no permite acceso a cámara y micrófono.");
+      return false;
+    }
 
     try {
-      return await preparacion;
+      await cargarPeerJS();
+      streamLocal = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      callbacks.alStreamLocal(streamLocal);
+
+      const puerto = location.port ? Number(location.port) : (location.protocol === "https:" ? 443 : 80);
+      peer = new Peer(socket.id, {
+        host: location.hostname || "localhost",
+        port: puerto,
+        path: "/peerjs",
+      });
+
+      peer.on("open", () => {
+        anunciarListo();
+      });
+
+      peer.on("call", (llamada) => {
+        llamada.answer(streamLocal);
+        registrarLlamada(llamada.peer, llamada);
+      });
+
+      peer.on("error", (error) => {
+        reportarError(error);
+      });
+
+      return true;
     } catch (error) {
-      preparacion = null;
+      if (streamLocal) {
+        streamLocal.getTracks().forEach((t) => t.stop());
+        streamLocal = null;
+      }
       reportarError(error);
       return false;
     }
   }
 
+  function alternarAudio() {
+    if (!streamLocal) return false;
+    const track = streamLocal.getAudioTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      return track.enabled;
+    }
+    return false;
+  }
+
+  function alternarVideo() {
+    if (!streamLocal) return false;
+    const track = streamLocal.getVideoTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      return track.enabled;
+    }
+    return false;
+  }
+
   function entrarSala() {
     salaLista = true;
-    conError(anunciarListo());
+    anunciarListo();
   }
 
   function detener() {
-    cerrarPeers();
-    streamLocal?.getTracks().forEach((track) => track.stop());
-    streamLocal = null;
+    cerrarLlamadas();
+    if (streamLocal) {
+      streamLocal.getTracks().forEach((t) => t.stop());
+      streamLocal = null;
+    }
+    if (peer) {
+      peer.destroy();
+      peer = null;
+    }
     salaLista = false;
   }
 
   globalThis.addEventListener?.("pagehide", detener);
 
-  return { iniciar, entrarSala, detener };
+  return { iniciar, entrarSala, detener, alternarAudio, alternarVideo };
 }
