@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pizarra virtual</title>
   <link rel="stylesheet" href="css/estilos.css">
 </head>
+
 <body>
 
   <section id="pantalla-sala">
@@ -27,7 +29,8 @@
       <label>Grosor <input id="grosor" type="range" min="1" max="20" value="3"></label>
       <button id="btn-limpiar" type="button">Limpiar</button>
       <span id="nombre-sala"></span>
-      <span id="estado-conexion-barra" data-estado="conectando" role="status" aria-live="polite">Conectando al servidor...</span>
+      <span id="estado-conexion-barra" data-estado="conectando" role="status" aria-live="polite">Conectando al
+        servidor...</span>
     </div>
     <section id="video-panel" aria-label="Videollamada">
       <div id="video-controles">
@@ -51,4 +54,5 @@
   <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
+
 </html>
