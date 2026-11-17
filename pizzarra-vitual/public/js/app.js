@@ -5,6 +5,7 @@ import {
   pintarTrazo,
 } from "./canvas.js";
 import { crearConexionPizarra } from "./socket.js";
+import { crearVideollamada } from "./webrtc.js";
 
 const pantallaSala = document.getElementById("pantalla-sala");
 const pantallaPizarra = document.getElementById("pantalla-pizarra");
@@ -12,12 +13,19 @@ const formSala = document.getElementById("form-sala");
 const inputSala = document.getElementById("id-sala");
 const errorSala = document.getElementById("error-sala");
 const nombreSala = document.getElementById("nombre-sala");
-const contadorUsuarios = document.getElementById("contador-usuarios");
+const errorVideo = document.getElementById("estado-video");
+const botonVideo = document.getElementById("btn-activar-video");
+const videoLocal = document.getElementById("video-local");
+const videoLocalContenedor = document.getElementById("video-local-contenedor");
+const videosRemotos = document.getElementById("videos-remotos");
+const participantes = document.getElementById("participantes");
 const estadosConexion = [
   document.getElementById("estado-conexion"),
   document.getElementById("estado-conexion-barra"),
 ];
 let salaPreparada = false;
+let videollamada;
+const elementosRemotos = new Map();
 
 function actualizarEstadoConexion(estado, detalle) {
   if (estado === "desconectado" || estado === "error") salaPreparada = false;
@@ -39,17 +47,71 @@ const conexion = crearConexionPizarra({
     salaPreparada = true;
     limpiarCanvas();
     pintarHistorial(lista);
+    videollamada.entrarSala();
     actualizarEstadoConexion("conectado");
   },
   alRecibirTrazo: pintarTrazo,
   alLimpiar: limpiarCanvas,
   alCambiarEstado: actualizarEstadoConexion,
-  alActualizarUsuarios(total) {
-    if (contadorUsuarios) {
-      contadorUsuarios.textContent = `${total} usuario${total === 1 ? "" : "s"}`;
-      contadorUsuarios.hidden = false;
+  alErrorSala(mensaje) {
+    salaPreparada = false;
+    pantallaPizarra.hidden = true;
+    pantallaSala.hidden = false;
+    errorSala.textContent = mensaje;
+    errorSala.hidden = false;
+  },
+  alCambiarUsuarios(total) {
+    if (!Number.isInteger(total) || total < 0) return;
+    participantes.textContent = `${total} ${total === 1 ? "participante" : "participantes"}`;
+  },
+});
+
+videollamada = crearVideollamada(conexion.socket, {
+  alStreamLocal(stream) {
+    videoLocal.srcObject = stream;
+    videoLocalContenedor.hidden = false;
+    botonVideo.hidden = true;
+    errorVideo.textContent = "Cámara y micrófono activos.";
+  },
+  alRecibirStream(idPeer, stream) {
+    let elemento = elementosRemotos.get(idPeer);
+    if (!elemento) {
+      const figura = document.createElement("figure");
+      const etiqueta = document.createElement("figcaption");
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      etiqueta.textContent = `Participante ${idPeer}`;
+      figura.append(video, etiqueta);
+      videosRemotos.append(figura);
+      elemento = { figura, video };
+      elementosRemotos.set(idPeer, elemento);
+    }
+    elemento.video.srcObject = stream;
+  },
+  alDesconectar(idPeer) {
+    const elemento = elementosRemotos.get(idPeer);
+    if (elemento) {
+      elemento.figura.remove();
+      elementosRemotos.delete(idPeer);
     }
   },
+  alError(mensaje) {
+    errorVideo.textContent = `Videollamada: ${mensaje}`;
+    botonVideo.hidden = false;
+  },
+});
+
+botonVideo.addEventListener("click", async () => {
+  if (!salaPreparada) {
+    errorVideo.textContent = "Espera a que la sala termine de sincronizarse.";
+    return;
+  }
+  botonVideo.disabled = true;
+  errorVideo.textContent = "Solicitando acceso a cámara y micrófono...";
+  const iniciado = await videollamada.iniciar();
+  botonVideo.disabled = false;
+  if (!iniciado) botonVideo.hidden = false;
 });
 
 formSala.addEventListener("submit", (e) => {

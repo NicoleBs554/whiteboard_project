@@ -98,9 +98,9 @@ test("entrega al cliente los eventos definidos por el contrato", () => {
   const historial = [];
   const trazos = [];
   let limpiezas = 0;
-  let usuariosConectados = 0;
-
-  crearConexionPizarra({
+  let usuarios = 0;
+  const erroresSala = [];
+  const conexion = crearConexionPizarra({
     alRecibirHistorial(lista) {
       historial.push(lista);
     },
@@ -110,8 +110,11 @@ test("entrega al cliente los eventos definidos por el contrato", () => {
     alLimpiar() {
       limpiezas += 1;
     },
-    alActualizarUsuarios(numero) {
-      usuariosConectados = numero;
+    alCambiarUsuarios(total) {
+      usuarios = total;
+    },
+    alErrorSala(mensaje) {
+      erroresSala.push(mensaje);
     },
     alCambiarEstado() {},
   }, () => socket);
@@ -121,9 +124,12 @@ test("entrega al cliente los eventos definidos por el contrato", () => {
   socket.recibir("dibujar", lista[0]);
   socket.recibir("limpiar");
   socket.recibir("usuarios", 3);
+  socket.recibir("sala-error", "La sala ya tiene el máximo de 3 participantes.");
 
+  assert.equal(conexion.socket, socket);
   assert.deepEqual(historial, [lista]);
   assert.deepEqual(trazos, [lista[0]]);
   assert.equal(limpiezas, 1);
-  assert.equal(usuariosConectados, 3);
+  assert.equal(usuarios, 3);
+  assert.deepEqual(erroresSala, ["La sala ya tiene el máximo de 3 participantes."]);
 });
