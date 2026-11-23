@@ -245,53 +245,52 @@ test("malla P2P de 3 clientes con camara, microfono, controles de mute y respald
     };
   }
 
-  const instanciasPC = [];
-  class MockRTCPeerConnection {
-    constructor(config) {
-      this.config = config;
-      this.tracks = [];
-      this.candidatos = [];
-      this.localDescription = null;
-      this.remoteDescription = null;
-      this.connectionState = "new";
-      this.onicecandidate = null;
-      this.ontrack = null;
-      instanciasPC.push(this);
+  const instanciasPeer = new Map();
+  class MockPeer {
+    constructor(id, opciones) {
+      this.id = id;
+      this.opciones = opciones;
+      this.eventos = new Map();
+      this.destruido = false;
+      instanciasPeer.set(id, this);
+      queueMicrotask(() => this.eventos.get("open")?.(id));
     }
 
-    addTrack(track, stream) {
-      this.tracks.push({ track, stream });
+    on(evento, listener) {
+      this.eventos.set(evento, listener);
     }
 
-    async createOffer() {
-      return { type: "offer", sdp: "v=0\r\noffer" };
+    call(idDestino, streamEmisor) {
+      const eventosEmisor = new Map();
+      const llamadaEmisor = {
+        peer: idDestino,
+        on(ev, cb) { eventosEmisor.set(ev, cb); },
+        close() { eventosEmisor.get("close")?.(); },
+      };
+
+      const peerDestino = instanciasPeer.get(idDestino);
+      if (peerDestino) {
+        const eventosDestino = new Map();
+        const llamadaDestino = {
+          peer: this.id,
+          on(ev, cb) { eventosDestino.set(ev, cb); },
+          answer(streamDestino) {
+            queueMicrotask(() => {
+              eventosDestino.get("stream")?.(streamEmisor);
+              eventosEmisor.get("stream")?.(streamDestino);
+            });
+          },
+          close() { eventosDestino.get("close")?.(); },
+        };
+        queueMicrotask(() => peerDestino.eventos.get("call")?.(llamadaDestino));
+      }
+
+      return llamadaEmisor;
     }
 
-    async createAnswer() {
-      return { type: "answer", sdp: "v=0\r\nanswer" };
-    }
-
-    async setLocalDescription(desc) {
-      this.localDescription = desc;
-      queueMicrotask(() => {
-        this.onicecandidate?.({
-          candidate: { toJSON: () => ({ candidate: "relay-turn", sdpMid: "0" }) },
-        });
-      });
-    }
-
-    async setRemoteDescription(desc) {
-      this.remoteDescription = desc;
-      this.connectionState = "connected";
-      this.ontrack?.({ streams: [{ id: `remote-${desc.type}` }] });
-    }
-
-    async addIceCandidate(candidato) {
-      this.candidatos.push(candidato);
-    }
-
-    close() {
-      this.connectionState = "closed";
+    destroy() {
+      this.destruido = true;
+      instanciasPeer.delete(this.id);
     }
   }
 
@@ -304,7 +303,8 @@ test("malla P2P de 3 clientes con camara, microfono, controles de mute y respald
     const errores = [];
 
     const entorno = {
-      RTCPeerConnection: MockRTCPeerConnection,
+      Peer: MockPeer,
+      location: { hostname: "localhost", port: "3000", protocol: "http:" },
       fetch: async () => ({ ok: true, json: async () => ({ iceServers: turnConfig }) }),
       navigator: {
         mediaDevices: {
@@ -335,11 +335,10 @@ test("malla P2P de 3 clientes con camara, microfono, controles de mute y respald
     assert.deepEqual(c.errores, []);
     assert.equal(c.call.obtenerTotalConexiones(), 2);
     assert.equal(c.streamsRemotos.size, 2);
+    const peerInst = instanciasPeer.get(c.id);
+    assert.equal(peerInst.opciones.path, "/peerjs");
+    assert.equal(peerInst.opciones.config.iceServers[0].urls, turnConfig[0].urls);
   }
-
-  assert.ok(instanciasPC.length >= 6);
-  assert.ok(instanciasPC.every((pc) => pc.config.iceServers[0].urls.startsWith("turn:")));
-  assert.ok(instanciasPC.every((pc) => pc.tracks.length === 2));
 
   // Controles de cámara y micrófono
   assert.equal(clientes[0].call.alternarCamara(), false);
@@ -359,7 +358,8 @@ test("malla P2P de 3 clientes con camara, microfono, controles de mute y respald
     alDesconectar() {},
     alError() {},
   }, {
-    RTCPeerConnection: MockRTCPeerConnection,
+    Peer: MockPeer,
+    location: { hostname: "localhost", port: "3000", protocol: "http:" },
     fetch: async () => ({ ok: true, json: async () => ({ iceServers: turnConfig }) }),
     navigator: {
       mediaDevices: {

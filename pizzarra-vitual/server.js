@@ -2,6 +2,7 @@ import express from "express";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
+import { ExpressPeerServer } from "peer";
 import { registrarPizarra } from "./src/sockets/pizarraSocket.js";
 import { registrarWebRTC } from "./src/sockets/webrtcSocket.js";
 
@@ -28,13 +29,18 @@ function cargarIceServers() {
 
 const iceServers = cargarIceServers();
 const app = express();
-const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
+const server = http.createServer(app);
+
+const peerServer = ExpressPeerServer(server, { path: "/" });
+app.use("/peerjs", peerServer);
+
 app.get("/rtc-config", (_req, res) => {
   res.json({ iceServers });
 });
+
+const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
 app.use(express.static(publicDirectory));
 
-const server = http.createServer(app);
 const io = new Server(server);
 const pizarra = io.of("/pizarra");
 registrarPizarra(pizarra);

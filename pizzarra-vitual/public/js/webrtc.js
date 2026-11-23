@@ -1,3 +1,18 @@
+function cargarPeerJS(entorno) {
+  if (typeof entorno.Peer === "function") return Promise.resolve();
+  const doc = entorno.document ?? globalThis.document;
+  if (!doc) {
+    return Promise.reject(new Error("No se encontró PeerJS en este entorno."));
+  }
+  return new Promise((resolve, reject) => {
+    const script = doc.createElement("script");
+    script.src = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("No se pudo cargar la librería PeerJS."));
+    doc.head.appendChild(script);
+  });
+}
+
 async function solicitarMediosDisponibles(mediaDevices) {
   const opciones = [
     { video: true, audio: true },
@@ -30,10 +45,10 @@ function alternarPistas(pistas, activo) {
 }
 
 export function crearVideollamada(socket, callbacks, entorno = globalThis) {
-  const conexiones = new Map();
-  const candidatosPendientes = new Map();
+  const llamadas = new Map();
   let streamLocal = null;
-  let iceServers = [];
+  let peer = null;
+  let peerAbierto = false;
   let salaLista = false;
   let preparacion = null;
 
@@ -41,80 +56,55 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
     callbacks.alError(error instanceof Error ? error.message : String(error));
   }
 
-  function conError(promise) {
-    promise.catch(reportarError);
-  }
-
-  function cerrarPeer(idPeer) {
-    const conexion = conexiones.get(idPeer);
-    if (conexion) {
-      conexion.close();
-      conexiones.delete(idPeer);
+  function cerrarLlamada(idPeer) {
+    const llamada = llamadas.get(idPeer);
+    if (llamada) {
+      llamadas.delete(idPeer);
+      try {
+        llamada.close();
+      } catch {
+        // ignorar si ya estaba cerrada
+      }
       callbacks.alDesconectar(idPeer);
     }
-    candidatosPendientes.delete(idPeer);
   }
 
-  function cerrarPeers() {
-    for (const idPeer of Array.from(conexiones.keys())) cerrarPeer(idPeer);
-    candidatosPendientes.clear();
+  function cerrarLlamadas() {
+    for (const idPeer of Array.from(llamadas.keys())) {
+      cerrarLlamada(idPeer);
+    }
+    llamadas.clear();
   }
 
-  function crearPeerConnection(idPeer) {
-    const PeerConnection = entorno.RTCPeerConnection;
-    const conexion = new PeerConnection({ iceServers });
-    conexiones.set(idPeer, conexion);
-    streamLocal.getTracks().forEach((track) => conexion.addTrack(track, streamLocal));
+  function registrarLlamada(idPeer, llamada) {
+    llamadas.set(idPeer, llamada);
 
-    conexion.onicecandidate = (evento) => {
-      if (evento.candidate && socket.connected) {
-        const candidato = typeof evento.candidate.toJSON === "function"
-          ? evento.candidate.toJSON()
-          : evento.candidate;
-        socket.emit("webrtc-ice-candidate", {
-          to: idPeer,
-          candidate: candidato,
-        });
-      }
-    };
+    llamada.on("stream", (streamRemoto) => {
+      callbacks.alRecibirStream(idPeer, streamRemoto);
+    });
 
-    conexion.ontrack = (evento) => {
-      const stream = evento.streams[0];
-      if (stream) callbacks.alRecibirStream(idPeer, stream);
-    };
+    llamada.on("close", () => {
+      cerrarLlamada(idPeer);
+    });
 
-    conexion.onconnectionstatechange = () => {
-      if (conexion.connectionState === "failed" || conexion.connectionState === "closed") {
-        cerrarPeer(idPeer);
-      }
-    };
-
-    return conexion;
+    llamada.on("error", (error) => {
+      reportarError(error);
+      cerrarLlamada(idPeer);
+    });
   }
 
-  async function aplicarCandidatosPendientes(idPeer, conexion) {
-    const candidatos = candidatosPendientes.get(idPeer) ?? [];
-    candidatosPendientes.delete(idPeer);
-    for (const candidato of candidatos) {
-      await conexion.addIceCandidate(candidato);
+  function conectarPeer(idPeer) {
+    if (!peer || !peerAbierto || !streamLocal || !salaLista || llamadas.has(idPeer)) return;
+    if (socket.id && socket.id.localeCompare(idPeer) >= 0) return;
+
+    const llamada = peer.call(idPeer, streamLocal);
+    if (llamada) {
+      registrarLlamada(idPeer, llamada);
     }
   }
 
-  async function crearOferta(idPeer) {
-    if (!streamLocal || !salaLista || !socket.connected || conexiones.has(idPeer)) return;
-
-    const conexion = crearPeerConnection(idPeer);
-    const oferta = await conexion.createOffer();
-    await conexion.setLocalDescription(oferta);
-    socket.emit("webrtc-offer", { to: idPeer, sdp: conexion.localDescription ?? oferta });
-  }
-
-  function puedeIniciarOferta(idPeer) {
-    return socket.id && socket.id.localeCompare(idPeer) < 0;
-  }
-
-  async function anunciarListo() {
-    if (!streamLocal || !salaLista || !socket.connected) return;
+  function anunciarListo() {
+    if (!streamLocal || !salaLista || !socket.connected || !peer || !peerAbierto) return;
 
     socket.emit("webrtc-ready");
     socket.emit("obtener-pares", (pares) => {
@@ -123,65 +113,30 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
         return;
       }
       pares.forEach((idPeer) => {
-        if (typeof idPeer === "string" && puedeIniciarOferta(idPeer)) {
-          conError(crearOferta(idPeer));
+        if (typeof idPeer === "string") {
+          conectarPeer(idPeer);
         }
       });
     });
   }
 
   socket.on("peer-ready", (idPeer) => {
-    if (typeof idPeer === "string" && puedeIniciarOferta(idPeer)) {
-      conError(crearOferta(idPeer));
+    if (typeof idPeer === "string") {
+      conectarPeer(idPeer);
     }
   });
 
-  socket.on("webrtc-offer", async ({ from, sdp } = {}) => {
-    if (typeof from !== "string" || !streamLocal) return;
-    try {
-      const conexion = conexiones.get(from) ?? crearPeerConnection(from);
-      await conexion.setRemoteDescription(sdp);
-      await aplicarCandidatosPendientes(from, conexion);
-      const respuesta = await conexion.createAnswer();
-      await conexion.setLocalDescription(respuesta);
-      socket.emit("webrtc-answer", { to: from, sdp: conexion.localDescription ?? respuesta });
-    } catch (error) {
-      reportarError(error);
-    }
+  socket.on("peer-disconnected", (idPeer) => {
+    cerrarLlamada(idPeer);
   });
 
-  socket.on("webrtc-answer", async ({ from, sdp } = {}) => {
-    const conexion = conexiones.get(from);
-    if (!conexion) return;
-    try {
-      await conexion.setRemoteDescription(sdp);
-      await aplicarCandidatosPendientes(from, conexion);
-    } catch (error) {
-      reportarError(error);
-    }
+  socket.on("disconnect", () => {
+    cerrarLlamadas();
   });
-
-  socket.on("webrtc-ice-candidate", async ({ from, candidate } = {}) => {
-    if (typeof from !== "string" || !candidate) return;
-    const conexion = conexiones.get(from);
-    if (!conexion || !conexion.remoteDescription) {
-      const pendientes = candidatosPendientes.get(from) ?? [];
-      pendientes.push(candidate);
-      candidatosPendientes.set(from, pendientes);
-      return;
-    }
-    try {
-      await conexion.addIceCandidate(candidate);
-    } catch (error) {
-      reportarError(error);
-    }
-  });
-
-  socket.on("peer-disconnected", cerrarPeer);
-  socket.on("disconnect", cerrarPeers);
 
   async function cargarConfiguracion() {
     const fetchFn = entorno.fetch ?? globalThis.fetch;
+    if (typeof fetchFn !== "function") return [];
     const respuesta = await fetchFn("/rtc-config");
     if (!respuesta.ok) throw new Error("No se pudo cargar la configuración de ICE.");
     const configuracion = await respuesta.json();
@@ -198,14 +153,13 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
     preparacion = (async () => {
       const mediaDevices = entorno.navigator?.mediaDevices;
       if (!mediaDevices?.getUserMedia) {
-        throw new Error("Este navegador no permite acceso a cámara y micrófono.");
-      }
-      if (typeof entorno.RTCPeerConnection !== "function") {
-        throw new Error("Este navegador no es compatible con WebRTC.");
+        throw new Error("El navegador no permite acceso a cámara y micrófono.");
       }
 
       let stream;
+      let iceServers;
       try {
+        await cargarPeerJS(entorno);
         stream = await solicitarMediosDisponibles(mediaDevices);
         iceServers = await cargarConfiguracion();
       } catch (error) {
@@ -215,7 +169,32 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
 
       streamLocal = stream;
       callbacks.alStreamLocal(streamLocal);
-      await anunciarListo();
+
+      const loc = entorno.location ?? { hostname: "localhost", port: "3000", protocol: "http:" };
+      const puerto = loc.port ? Number(loc.port) : (loc.protocol === "https:" ? 443 : 80);
+      const PeerCtor = entorno.Peer;
+      peerAbierto = false;
+      peer = new PeerCtor(socket.id, {
+        host: loc.hostname || "localhost",
+        port: puerto,
+        path: "/peerjs",
+        config: { iceServers },
+      });
+
+      peer.on("open", () => {
+        peerAbierto = true;
+        anunciarListo();
+      });
+
+      peer.on("call", (llamada) => {
+        llamada.answer(streamLocal);
+        registrarLlamada(llamada.peer, llamada);
+      });
+
+      peer.on("error", (error) => {
+        reportarError(error);
+      });
+
       return true;
     })();
 
@@ -228,21 +207,6 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
     }
   }
 
-  function entrarSala() {
-    salaLista = true;
-    conError(anunciarListo());
-  }
-
-  function detener(abandonarSala = false) {
-    cerrarPeers();
-    streamLocal?.getTracks().forEach((track) => track.stop());
-    streamLocal = null;
-    preparacion = null;
-    if (abandonarSala) {
-      salaLista = false;
-    }
-  }
-
   function alternarCamara(activo) {
     return alternarPistas(streamLocal?.getVideoTracks(), activo);
   }
@@ -252,7 +216,29 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
   }
 
   function obtenerTotalConexiones() {
-    return conexiones.size;
+    return llamadas.size;
+  }
+
+  function entrarSala() {
+    salaLista = true;
+    anunciarListo();
+  }
+
+  function detener(abandonarSala = false) {
+    cerrarLlamadas();
+    if (streamLocal) {
+      streamLocal.getTracks().forEach((t) => t.stop());
+      streamLocal = null;
+    }
+    if (peer) {
+      peer.destroy();
+      peer = null;
+    }
+    peerAbierto = false;
+    preparacion = null;
+    if (abandonarSala) {
+      salaLista = false;
+    }
   }
 
   entorno.addEventListener?.("pagehide", () => detener(true));
@@ -263,6 +249,8 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
     detener,
     alternarCamara,
     alternarMicrofono,
+    alternarVideo: alternarCamara,
+    alternarAudio: alternarMicrofono,
     obtenerTotalConexiones,
   };
 }

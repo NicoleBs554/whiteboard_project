@@ -21,10 +21,10 @@ Abre <http://localhost:3000> en hasta tres navegadores e ingresa el mismo ID de 
 
 El proyecto se ejecuta desde `pizzarra-vitual/`, con una separación pequeña por responsabilidad:
 
-- `pizzarra-vitual/public/`: interfaz, canvas y clientes Socket.io/WebRTC.
-- `pizzarra-vitual/server.js`: servidor Express, Socket.io y configuración ICE.
+- `pizzarra-vitual/public/`: interfaz, canvas y clientes Socket.io/WebRTC (PeerJS).
+- `pizzarra-vitual/server.js`: servidor Express, Socket.io, PeerJS (`/peerjs`) y configuración ICE (`/rtc-config`).
 - `pizzarra-vitual/src/sockets/`: eventos de pizarra y señalización WebRTC.
-- `pizzarra-vitual/src/services/`: historial en memoria por sala.
+- `pizzarra-vitual/src/services/`: historial en memoria por sala con soporte opcional de PostgreSQL.
 - `pizzarra-vitual/src/utils/`: validación del protocolo y logs.
 - `pizzarra-vitual/src/db/`: persistencia opcional en PostgreSQL (`sentences.json`, `dbComponent.js` y `schema.sql`).
 - `pizzarra-vitual/turnserver.conf.example`: plantilla de Coturn, que se despliega fuera de Node.js.
@@ -39,9 +39,9 @@ El cliente espera que Socket.IO sirva `/socket.io/socket.io.js` en la misma dire
 
 ## Videollamada
 
-La videollamada usa WebRTC en malla y admite hasta tres participantes por sala (dos conexiones peer-to-peer por navegador). Al entrar, cada persona puede activar cámara y micrófono (o uno solo de ellos si falta el otro dispositivo), silenciar el micrófono, apagar la cámara o detener la videollamada. Socket.IO intercambia las ofertas, respuestas y candidatos ICE, pero el audio y el video se transmiten entre navegadores. El cliente solo negocia con participantes de su sala.
+La videollamada usa la librería **PeerJS** para establecer conexiones peer-to-peer en malla y admite hasta tres participantes por sala (dos conexiones P2P por navegador). Al entrar, cada persona puede activar cámara y micrófono (o uno solo de ellos si falta el otro dispositivo), silenciar el micrófono, apagar la cámara o detener la videollamada. El servidor Express monta el servicio PeerJS en `/peerjs` y expone la configuración ICE en `GET /rtc-config`, mientras que el audio y el video se transmiten directamente entre los navegadores. Cada cliente solo negocia con participantes de su misma sala.
 
-La aplicación obtiene la configuración ICE desde `GET /rtc-config`. Define `RTC_ICE_SERVERS` como un arreglo JSON en el entorno del servidor para configurar STUN/TURN. Ejemplo de desarrollo:
+Define `RTC_ICE_SERVERS` como un arreglo JSON en el entorno del servidor para configurar STUN/TURN (Coturn). Ejemplo de desarrollo:
 
 ```powershell
 $env:RTC_ICE_SERVERS='[{"urls":"stun:TU_SERVIDOR:3478"},{"urls":"turn:TU_SERVIDOR:3478?transport=udp","username":"USUARIO","credential":"CONTRASENA"}]'

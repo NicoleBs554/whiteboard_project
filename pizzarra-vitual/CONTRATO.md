@@ -80,7 +80,7 @@ Un trazo = desde que se pulsa el botón izquierdo hasta que se suelta.
 - Si el socket no ha enviado `unirseSala`, se ignoran sus `dibujar` y `limpiar`.
 - Los trazos se guardan **en memoria** por sala: `{ "sala1": [trazo, ...] }`. La base de datos es opcional.
 - Cada sala admite un máximo de **3 sockets**. Los mensajes de señalización se aceptan solo entre sockets de la misma sala.
-- El servidor reenvía SDP e ICE, pero nunca procesa ni almacena el audio o video. La configuración de ICE se publica desde el servidor mediante `GET /rtc-config`.
+- El servidor monta el servicio PeerJS en `/peerjs` para la videollamada P2P en malla de hasta 3 participantes por sala y publica la configuración ICE (STUN/TURN Coturn) mediante `GET /rtc-config`. El audio y video se transmiten directamente entre navegadores sin procesarse en el servidor.
 
 ---
 
@@ -100,4 +100,5 @@ Un trazo = desde que se pulsa el botón izquierdo hasta que se suelta.
 
 | Fecha | Cambio | Propuesto por | Aprobado |
 |---|---|---|---|
-| ____/____/____ | Versión inicial | | |
+| Versión inicial | Estructura base de pizarra y trazos | A, B, C | [x] |
+| 17/11/2026 | Integración de PeerJS para videollamada P2P de 3 personas | B | [x] |
