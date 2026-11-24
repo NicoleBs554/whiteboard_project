@@ -1,10 +1,4 @@
-import {
-  agregarTrazo,
-  cargarHistorial,
-  obtenerHistorial,
-  limpiarSala,
-} from "../services/salaService.js";
-import { db } from "../db/dbComponent.js";
+import { agregarTrazo, obtenerHistorial, limpiarSala } from "../services/salaService.js";
 import { validarTrazo, validarSala } from "../utils/validador.js";
 import { log } from "../utils/logger.js";
 
@@ -19,7 +13,7 @@ export function registrarPizarra(nsp) {
   nsp.on("connection", (socket) => {
     log.info(`Conectado: ${socket.id}`);
 
-    socket.on("unirseSala", async (idSala) => {
+    socket.on("unirseSala", (idSala) => {
       if (!validarSala(idSala)) {
         log.warning(`ID de sala invalido desde ${socket.id}`);
         return;
@@ -42,10 +36,7 @@ export function registrarPizarra(nsp) {
       socket.join(idSala);
       socket.data.sala = idSala;
       socket.data.webrtcReady = false;
-      const historial = db.estaHabilitada()
-        ? await cargarHistorial(idSala)
-        : obtenerHistorial(idSala);
-      socket.emit("historial", historial);
+      socket.emit("historial", obtenerHistorial(idSala));
       if (!yaEstabaEnSala) socket.to(idSala).emit("peer-joined", socket.id);
       notificarUsuarios(nsp, idSala);
     });

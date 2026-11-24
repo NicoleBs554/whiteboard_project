@@ -1,3 +1,8 @@
+const STUN_POR_DEFECTO = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+
 function cargarPeerJS(entorno) {
   if (typeof entorno.Peer === "function") return Promise.resolve();
   const doc = entorno.document ?? globalThis.document;
@@ -91,6 +96,16 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
       reportarError(error);
       cerrarLlamada(idPeer);
     });
+
+    const pc = llamada.peerConnection;
+    pc?.addEventListener?.("iceconnectionstatechange", () => {
+      const estado = pc.iceConnectionState;
+      if (estado === "failed") {
+        reportarError("No se pudo atravesar el NAT/firewall (configura un servidor TURN/Coturn en RTC_ICE_SERVERS).");
+      } else if (estado === "connected" || estado === "completed") {
+        callbacks.alEstado?.("Videollamada P2P conectada.");
+      }
+    });
   }
 
   function conectarPeer(idPeer) {
@@ -159,9 +174,10 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
       let stream;
       let iceServers;
       try {
-        await cargarPeerJS(entorno);
         stream = await solicitarMediosDisponibles(mediaDevices);
-        iceServers = await cargarConfiguracion();
+        await cargarPeerJS(entorno);
+        const configurados = await cargarConfiguracion();
+        iceServers = configurados.length > 0 ? configurados : STUN_POR_DEFECTO;
       } catch (error) {
         stream?.getTracks().forEach((track) => track.stop());
         throw error;
@@ -178,6 +194,7 @@ export function crearVideollamada(socket, callbacks, entorno = globalThis) {
         host: loc.hostname || "localhost",
         port: puerto,
         path: "/peerjs",
+        secure: loc.protocol === "https:",
         config: { iceServers },
       });
 

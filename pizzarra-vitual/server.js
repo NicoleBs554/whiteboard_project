@@ -31,8 +31,28 @@ const iceServers = cargarIceServers();
 const app = express();
 const server = http.createServer(app);
 
-const peerServer = ExpressPeerServer(server, { path: "/" });
+const io = new Server(server);
+const ioUpgradeListeners = server.listeners("upgrade").slice();
+server.removeAllListeners("upgrade");
+
+const peerServer = ExpressPeerServer(server, { path: "/", proxied: true });
 app.use("/peerjs", peerServer);
+const peerUpgradeListeners = server.listeners("upgrade").slice();
+server.removeAllListeners("upgrade");
+
+server.on("upgrade", (req, socket, head) => {
+  if (req.url?.startsWith("/peerjs")) {
+    peerUpgradeListeners.forEach((fn) => fn.call(server, req, socket, head));
+  } else if (req.url?.startsWith("/socket.io")) {
+    ioUpgradeListeners.forEach((fn) => fn.call(server, req, socket, head));
+  } else {
+    socket.destroy();
+  }
+});
+
+app.get("/favicon.ico", (_req, res) => {
+  res.status(204).end();
+});
 
 app.get("/rtc-config", (_req, res) => {
   res.json({ iceServers });
@@ -41,7 +61,6 @@ app.get("/rtc-config", (_req, res) => {
 const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
 app.use(express.static(publicDirectory));
 
-const io = new Server(server);
 const pizarra = io.of("/pizarra");
 registrarPizarra(pizarra);
 registrarWebRTC(pizarra);

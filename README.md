@@ -24,9 +24,8 @@ El proyecto se ejecuta desde `pizzarra-vitual/`, con una separación pequeña po
 - `pizzarra-vitual/public/`: interfaz, canvas y clientes Socket.io/WebRTC (PeerJS).
 - `pizzarra-vitual/server.js`: servidor Express, Socket.io, PeerJS (`/peerjs`) y configuración ICE (`/rtc-config`).
 - `pizzarra-vitual/src/sockets/`: eventos de pizarra y señalización WebRTC.
-- `pizzarra-vitual/src/services/`: historial en memoria por sala con soporte opcional de PostgreSQL.
+- `pizzarra-vitual/src/services/`: historial en memoria por sala.
 - `pizzarra-vitual/src/utils/`: validación del protocolo y logs.
-- `pizzarra-vitual/src/db/`: persistencia opcional en PostgreSQL (`sentences.json`, `dbComponent.js` y `schema.sql`).
 - `pizzarra-vitual/turnserver.conf.example`: plantilla de Coturn, que se despliega fuera de Node.js.
 
 ## Protocolo

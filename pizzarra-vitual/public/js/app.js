@@ -86,6 +86,7 @@ const conexion = crearConexionPizarra({
 videollamada = crearVideollamada(conexion.socket, {
   alStreamLocal(stream) {
     videoLocal.srcObject = stream;
+    videoLocal.play?.().catch(() => {});
     videoLocalContenedor.hidden = false;
     botonVideo.hidden = true;
     const tieneCamara = stream.getVideoTracks().length > 0;
@@ -111,13 +112,33 @@ videollamada = crearVideollamada(conexion.socket, {
       const video = document.createElement("video");
       video.autoplay = true;
       video.playsInline = true;
+      video.setAttribute("autoplay", "");
+      video.setAttribute("playsinline", "");
       etiqueta.textContent = `Participante ${idPeer}`;
       figura.append(video, etiqueta);
       videosRemotos.append(figura);
-      elemento = { figura, video };
+      elemento = { figura, video, etiqueta };
       elementosRemotos.set(idPeer, elemento);
     }
-    elemento.video.srcObject = stream;
+    const video = elemento.video;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    const reproducir = () => {
+      video.play?.().catch(() => {
+        video.muted = true;
+        elemento.etiqueta.textContent = `Participante ${idPeer} (toca el video para activar audio)`;
+        video.onclick = () => {
+          video.muted = false;
+          video.play?.().catch(() => {});
+          elemento.etiqueta.textContent = `Participante ${idPeer}`;
+          video.onclick = null;
+        };
+        video.play?.().catch(() => {});
+      });
+    };
+    video.onloadedmetadata = reproducir;
+    reproducir();
   },
   alDesconectar(idPeer) {
     const elemento = elementosRemotos.get(idPeer);
@@ -125,6 +146,9 @@ videollamada = crearVideollamada(conexion.socket, {
       elemento.figura.remove();
       elementosRemotos.delete(idPeer);
     }
+  },
+  alEstado(mensaje) {
+    errorVideo.textContent = mensaje;
   },
   alError(mensaje) {
     errorVideo.textContent = `Videollamada: ${mensaje}`;
